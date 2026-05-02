@@ -5,7 +5,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build vet lint test verify run dev-up
+.PHONY: help build vet lint test verify run dev-up pg-integration
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -29,3 +29,6 @@ run:    ## go run ./cmd/switchx
 
 dev-up: ## bootstrap local PG: fetch KV creds + create role + database
 	@bash .local/dev-env/dev-up.sh
+
+pg-integration: ## run the gated PG integration tests against the local DB
+	@bash .local/dev-env/pg-integration.sh

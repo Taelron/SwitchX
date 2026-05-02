@@ -4,18 +4,22 @@
 // bootstrap flow and TUI. See the M1 milestone in Linear:
 // https://linear.app/taelron/project/switchx-0b0069bd1c04
 //
-// TAE-6 wires the config loader; TAE-7 wires the secret resolver. TAE-13
-// replaces this minimal wiring with the full startup decision tree
-// (config -> secret -> pool -> migrations -> home).
+// TAE-6 wires the config loader; TAE-7 wires the secret resolver;
+// TAE-8 wires the connection pool. TAE-13 replaces this minimal flow
+// with the full startup decision tree (config -> secret -> pool ->
+// migrations -> home).
 package main
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Taelron/SwitchX/internal/app/secrets"
 	"github.com/Taelron/SwitchX/internal/config"
+	"github.com/Taelron/SwitchX/internal/storage/postgres"
 	"github.com/Taelron/SwitchX/internal/storage/secrets/azurekeyvault"
 )
 
@@ -28,15 +32,19 @@ func main() {
 
 // run holds the bootstrap sequence in a function whose deferred calls
 // run on every exit path. main() only translates errors into a process
-// exit code, so secret-zero defers never get skipped by os.Exit.
+// exit code, so secret-zero and pool-close defers never get skipped by
+// os.Exit.
 func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(),
+		syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 
 	provider := azurekeyvault.New()
-	ctx := context.Background()
 
 	user, err := provider.GetSecret(ctx, secrets.Ref{
 		Subscription: cfg.Database.Secret.Subscription,
@@ -58,8 +66,18 @@ func run() error {
 	}
 	defer zero(password)
 
-	fmt.Printf("switchx (placeholder) — config OK; user (%d bytes) + password (%d bytes) fetched\n",
-		len(user), len(password))
+	pool, err := postgres.Connect(ctx, cfg.Database, user, password)
+	if err != nil {
+		return fmt.Errorf("connect: %w", err)
+	}
+	defer pool.Close()
+
+	if err := postgres.HealthCheck(ctx, pool); err != nil {
+		return fmt.Errorf("health: %w", err)
+	}
+
+	fmt.Printf("switchx (placeholder) — DB ready (pool max %d, host %s, db %s)\n",
+		pool.Config().MaxConns, cfg.Database.Host, cfg.Database.Name)
 	return nil
 }
 
