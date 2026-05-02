@@ -28,6 +28,13 @@ var (
 	// password material via their Config, and the @Security & Secret
 	// Handling baseline forbids any path that could leak it.
 	ErrUnknown = errors.New("storage: connect failed")
+
+	// Migration sentinels (TAE-9). Surface only the category — the
+	// wrapped golang-migrate text is not embedded for the same
+	// secret-leakage reason as ErrUnknown.
+	ErrMigrationsFS         = errors.New("storage: migrations source unavailable")
+	ErrMigrationLockTimeout = errors.New("storage: migration lock timeout")
+	ErrMigrationFailed      = errors.New("storage: migration failed")
 )
 
 // classifyError maps a driver-level error into one of the storage

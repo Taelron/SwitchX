@@ -5,9 +5,9 @@
 // https://linear.app/taelron/project/switchx-0b0069bd1c04
 //
 // TAE-6 wires the config loader; TAE-7 wires the secret resolver;
-// TAE-8 wires the connection pool. TAE-13 replaces this minimal flow
-// with the full startup decision tree (config -> secret -> pool ->
-// migrations -> home).
+// TAE-8 wires the connection pool; TAE-9 wires the migrations runner.
+// TAE-13 replaces this minimal flow with the full startup decision
+// tree (config -> secret -> pool -> migrations -> home).
 package main
 
 import (
@@ -76,7 +76,11 @@ func run() error {
 		return fmt.Errorf("health: %w", err)
 	}
 
-	fmt.Printf("switchx (placeholder) — DB ready (pool max %d, host %s, db %s)\n",
+	if err := postgres.Migrate(ctx, cfg.Database, user, password); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
+	fmt.Printf("switchx (placeholder) — DB ready, migrations applied (pool max %d, host %s, db %s)\n",
 		pool.Config().MaxConns, cfg.Database.Host, cfg.Database.Name)
 	return nil
 }
