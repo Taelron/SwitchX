@@ -5,7 +5,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build vet lint test verify run dev-up dev-down pg-integration
+.PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -26,6 +26,10 @@ verify: build vet lint test ## run the full verification gate
 
 run:    ## go run ./cmd/switchx
 	go run ./cmd/switchx
+
+run-wizard: ## smoke the bootstrap wizard against an empty XDG_CONFIG_HOME
+	@rm -rf /tmp/switchx-wizard-smoke
+	XDG_CONFIG_HOME=/tmp/switchx-wizard-smoke go run ./cmd/switchx
 
 dev-up: ## bootstrap local PG: fetch KV creds + create role + database
 	@bash .local/dev-env/dev-up.sh
