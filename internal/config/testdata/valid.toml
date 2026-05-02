@@ -1,0 +1,18 @@
+[database]
+host    = "test-db.example.com"
+port    = 5432
+name    = "switchx"
+sslmode = "require"
+
+[database.secret]
+provider     = "azure-keyvault"
+subscription = "test-subscription"
+vault        = "test-vault"
+user_ref     = "switchx-db-test-user"
+password_ref = "switchx-db-test-password"
+
+[user]
+timezone = "Europe/Brussels"
+
+[ui]
+editor = "nvim"

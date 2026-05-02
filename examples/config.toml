@@ -1,0 +1,26 @@
+# switchx configuration. Save to ~/.config/switchx/config.toml with mode 0600.
+# Schema: https://linear.app/taelron/document/adr-0004-configuration-and-bootstrap-e5000764e4c4
+#
+# All fields below are required. switchx refuses to start if any are
+# missing or if the file mode permits group or world access.
+
+[database]
+host    = "your-postgres-host.example.com"
+port    = 5432
+name    = "switchx"
+sslmode = "require"
+
+[database.secret]
+# How to fetch the database credentials. The user and password are stored
+# as two separate secrets in the same vault under the same subscription.
+provider     = "azure-keyvault"
+subscription = "your-azure-subscription-id-or-name"
+vault        = "your-vault-name"
+user_ref     = "switchx-db-<your-consultant-id>-user"
+password_ref = "switchx-db-<your-consultant-id>-password"
+
+[user]
+timezone = "Europe/Brussels"
+
+[ui]
+editor = "nvim"
