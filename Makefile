@@ -6,7 +6,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration \
-        bootstrap-test-no-wizard bootstrap-test-wizard-ok \
+        bootstrap-test-no-wizard bootstrap-test-edit bootstrap-test-wizard-ok \
         bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db
 
 help: ## list targets
@@ -54,6 +54,9 @@ pg-integration: ## run the gated PG integration tests against the local DB
 
 bootstrap-test-no-wizard: ## valid config exists → no wizard, placeholder banner
 	@bash .local/dev-env/bootstrap-test.sh
+
+bootstrap-test-edit: ## --edit against real config → wizard pre-filled, saves back
+	@bash .local/dev-env/bootstrap-edit-test.sh
 
 bootstrap-test-wizard-ok: ## force wizard + valid seed → validate succeeds, persist
 	@bash .local/dev-env/wizard-test.sh ok
