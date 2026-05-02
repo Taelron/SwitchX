@@ -19,8 +19,10 @@ var (
 
 // ModalWidth is the fixed inner width (including padding) of every
 // modal box. Pinning it stops the box jumping size as fields focus or
-// hint-bar content changes between steps.
-const ModalWidth = 80
+// hint-bar content changes between steps. Sized to fit step 2's
+// longest label ("Subscription:" / "Password ref:") plus the widget
+// and error columns without truncation.
+const ModalWidth = 88
 
 // Modal is the centred bordered container for wizard steps and modal
 // overlays. Padding gives breathing room between the border and content;
@@ -55,3 +57,18 @@ var FieldError = lipgloss.NewStyle().
 var FocusedMarker = lipgloss.NewStyle().
 	Foreground(ColorInfo).
 	Bold(true)
+
+// ModalContentWidth is the inner content area: ModalWidth minus the
+// modal's horizontal padding (2 each side).
+const ModalContentWidth = ModalWidth - 4
+
+// ErrorBanner spans the modal's full content width and renders a
+// connect-validate error below the step body. The top border rule
+// separates the banner visually from the form fields above it.
+var ErrorBanner = lipgloss.NewStyle().
+	Foreground(ColorError).
+	Width(ModalContentWidth).
+	MarginTop(1).
+	PaddingTop(1).
+	Border(lipgloss.NormalBorder(), true, false, false, false).
+	BorderForeground(ColorError)

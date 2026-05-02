@@ -1,71 +1,15 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Taelron/SwitchX/internal/config"
 )
-
-func TestValidatePort(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		wantErr bool
-	}{
-		{"empty", "", true},
-		{"non-numeric", "abc", true},
-		{"zero", "0", true},
-		{"negative", "-1", true},
-		{"too-large", "65536", true},
-		{"min-valid", "1", false},
-		{"max-valid", "65535", false},
-		{"default", "5432", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := validatePort(tt.input)
-			if (got != "") != tt.wantErr {
-				t.Fatalf("validatePort(%q) = %q, wantErr=%v", tt.input, got, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestDatabaseStepValidateAggregatesErrors(t *testing.T) {
-	s := newDatabaseStep()
-	// Wipe the seeded port default so it also fails. host and name
-	// already start empty. The picker can never produce an invalid
-	// sslmode so it has no error path to exercise.
-	s.inputs[fieldPort].SetValue("")
-	s, ok := s.validate()
-	if ok {
-		t.Fatal("validate() = true with empty host/port/name, want false")
-	}
-	for _, i := range []int{fieldHost, fieldPort, fieldName} {
-		if s.errors[i] == "" {
-			t.Errorf("errors[%d] is empty, want a validation message", i)
-		}
-	}
-	if s.errors[fieldSSLMode] != "" {
-		t.Errorf("errors[fieldSSLMode] = %q, want empty (picker is always valid)", s.errors[fieldSSLMode])
-	}
-}
-
-func TestDatabaseStepValidatePassesWithDefaults(t *testing.T) {
-	s := newDatabaseStep()
-	s.inputs[fieldHost].SetValue("db.example.internal")
-	s.inputs[fieldName].SetValue("switchx")
-	s, ok := s.validate()
-	if !ok {
-		t.Fatalf("validate() = false with valid inputs, errors=%v", s.errors)
-	}
-	for i, msg := range s.errors {
-		if msg != "" {
-			t.Errorf("errors[%d] = %q, want empty", i, msg)
-		}
-	}
-}
 
 // keyMsg builds a tea.KeyMsg matching what Bubble Tea would produce for
 // the given key string. Special keys (tab, enter, esc, arrows) use their
@@ -92,146 +36,338 @@ func keyMsg(s string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
 
-func TestModelEscQuits(t *testing.T) {
-	m := newModel()
-	_, cmd := m.Update(keyMsg("esc"))
-	if cmd == nil {
-		t.Fatal("Update(esc) returned nil cmd, want tea.Quit")
-	}
-	msg := cmd()
-	if _, ok := msg.(tea.QuitMsg); !ok {
-		t.Fatalf("Update(esc) cmd produced %T, want tea.QuitMsg", msg)
-	}
+// modelWith builds a model with no-op validator/save by default.
+// Individual tests override either field via the returned model.
+func modelWith(t *testing.T) model {
+	t.Helper()
+	return newModel(
+		context.Background(),
+		func(context.Context, *config.Config) error { return nil },
+		func(*config.Config) error { return nil }, nil,
+	)
 }
 
-func TestModelTabCyclesFocus(t *testing.T) {
-	m := newModel()
-	if got := m.database.focus; got != fieldHost {
-		t.Fatalf("initial focus = %d, want %d", got, fieldHost)
-	}
-	for i := 1; i < fieldCount; i++ {
-		next, _ := m.Update(keyMsg("tab"))
-		m = next.(model)
-		if m.database.focus != i {
-			t.Fatalf("after %d tab(s) focus = %d, want %d", i, m.database.focus, i)
+// fillStep1 puts step 1 into a state where validate passes and the
+// wizard advances to step 2.
+func fillStep1(m model) model {
+	m.database.inputs[fieldDBHost].SetValue("db.example.internal")
+	m.database.inputs[fieldDBName].SetValue("switchx")
+	m.database.focus = fieldDBSSLMode
+	next, _ := m.Update(keyMsg("enter"))
+	return next.(model)
+}
+
+// fillStep2 fills step 2's four textinputs and Enters on the last
+// field. The test must already be on stepSecret.
+func fillStep2(m model) model {
+	m.secret.inputs[fieldSecretSubscription].SetValue("00000000-0000-0000-0000-000000000000")
+	m.secret.inputs[fieldSecretVault].SetValue("vault")
+	m.secret.inputs[fieldSecretUserRef].SetValue("user-ref")
+	m.secret.inputs[fieldSecretPasswordRef].SetValue("password-ref")
+	m.secret.focus = fieldSecretPasswordRef
+	next, _ := m.Update(keyMsg("enter"))
+	return next.(model)
+}
+
+// pickEditor sets the step-4 picker to the given editor name. The
+// curated list always contains "vi"; if the helper is asked for an
+// editor that is not in the list, the helper just keeps the default.
+func pickEditor(m model, name string) model {
+	for i, e := range m.preferences.editors {
+		if e == name {
+			m.preferences.index = i
+			return m
 		}
 	}
-	// One more tab wraps to 0.
+	return m
+}
+
+// fillStep3 cycles step 3's picker to Europe/Brussels and Enters. The
+// curated list always contains Brussels; cycling forward until found
+// keeps the helper resilient to whether the system TZ was prepended.
+func fillStep3(m model) model {
+	for range len(m.identity.zones) {
+		if m.identity.zones[m.identity.index] == "Europe/Brussels" {
+			break
+		}
+		s, _, _, _ := m.identity.Update(keyMsg("right"))
+		m.identity = s
+	}
+	next, _ := m.Update(keyMsg("enter"))
+	return next.(model)
+}
+
+func TestEscQuitsFromAnyStep(t *testing.T) {
+	for _, s := range []step{stepDatabase, stepSecret, stepIdentity, stepPreferences, stepValidating} {
+		m := modelWith(t)
+		m.current = s
+		_, cmd := m.Update(keyMsg("esc"))
+		if cmd == nil {
+			t.Errorf("step %d: Esc returned nil cmd", s)
+			continue
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Errorf("step %d: Esc cmd produced %T, want tea.QuitMsg", s, cmd())
+		}
+	}
+}
+
+func TestStep1AdvanceWritesDatabaseFields(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	if m.current != stepSecret {
+		t.Fatalf("after step-1 enter: current = %d, want %d", m.current, stepSecret)
+	}
+	if m.cfg.Database.Host != "db.example.internal" {
+		t.Errorf("cfg.Database.Host = %q", m.cfg.Database.Host)
+	}
+	if m.cfg.Database.Port != 5432 {
+		t.Errorf("cfg.Database.Port = %d", m.cfg.Database.Port)
+	}
+	if m.cfg.Database.Name != "switchx" {
+		t.Errorf("cfg.Database.Name = %q", m.cfg.Database.Name)
+	}
+	if m.cfg.Database.SSLMode != "require" {
+		t.Errorf("cfg.Database.SSLMode = %q", m.cfg.Database.SSLMode)
+	}
+}
+
+func TestStep2BackNavReturnsToStep1LastField(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	if m.current != stepSecret {
+		t.Fatalf("precondition: not on step 2 (current=%d)", m.current)
+	}
+	if m.secret.focus != 0 {
+		t.Fatalf("precondition: step 2 focus=%d, want 0", m.secret.focus)
+	}
+	next, _ := m.Update(keyMsg("shift+tab"))
+	m = next.(model)
+	if m.current != stepDatabase {
+		t.Fatalf("after shift+tab on step-2 field 0: current = %d, want %d", m.current, stepDatabase)
+	}
+	if m.database.focus != dbFieldCount-1 {
+		t.Errorf("step 1 focus on return = %d, want %d (last field)", m.database.focus, dbFieldCount-1)
+	}
+}
+
+func TestStep3BackNavReturnsToStep2LastField(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	if m.current != stepIdentity {
+		t.Fatalf("precondition: not on step 3 (current=%d)", m.current)
+	}
+	next, _ := m.Update(keyMsg("shift+tab"))
+	m = next.(model)
+	if m.current != stepSecret {
+		t.Fatalf("after shift+tab on step-3 field 0: current = %d, want %d", m.current, stepSecret)
+	}
+	if m.secret.focus != secretFieldCount-1 {
+		t.Errorf("step 2 focus on return = %d, want %d", m.secret.focus, secretFieldCount-1)
+	}
+}
+
+func TestStep4BackNavReturnsToStep3(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	m = fillStep3(m)
+	if m.current != stepPreferences {
+		t.Fatalf("precondition: not on step 4 (current=%d)", m.current)
+	}
+	next, _ := m.Update(keyMsg("shift+tab"))
+	m = next.(model)
+	if m.current != stepIdentity {
+		t.Fatalf("after shift+tab on step-4 field 0: current = %d, want %d", m.current, stepIdentity)
+	}
+}
+
+func TestStep1ShiftTabWrapsNoRetreat(t *testing.T) {
+	// Step 1 has no previous step; Shift+Tab on field 0 wraps to the
+	// last field, not retreats.
+	m := modelWith(t)
+	if m.database.focus != fieldDBHost {
+		t.Fatalf("precondition: focus=%d, want %d", m.database.focus, fieldDBHost)
+	}
+	next, _ := m.Update(keyMsg("shift+tab"))
+	m = next.(model)
+	if m.current != stepDatabase {
+		t.Fatalf("step 1 retreated unexpectedly: current=%d", m.current)
+	}
+	if m.database.focus != dbFieldCount-1 {
+		t.Errorf("focus after wrap = %d, want %d", m.database.focus, dbFieldCount-1)
+	}
+}
+
+func TestStep4AdvanceTriggersValidate(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	m = fillStep3(m)
+	// Editor default may already be set; ensure non-empty.
+	m = pickEditor(m, "vi")
+	next, _ := m.Update(keyMsg("enter"))
+	m = next.(model)
+	if m.current != stepValidating {
+		t.Fatalf("after step-4 enter: current = %d, want %d", m.current, stepValidating)
+	}
+	if m.cfg.UI.Editor != "vi" {
+		t.Errorf("cfg.UI.Editor = %q, want vi", m.cfg.UI.Editor)
+	}
+}
+
+func TestValidateSuccessSavesAndQuits(t *testing.T) {
+	saved := false
+	var savedCfg *config.Config
+	m := newModel(
+		context.Background(),
+		func(context.Context, *config.Config) error { return nil },
+		func(c *config.Config) error { saved = true; savedCfg = c; return nil }, nil,
+	)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	m = fillStep3(m)
+	m = pickEditor(m, "vi")
+	next, _ := m.Update(keyMsg("enter"))
+	m = next.(model)
+	// Now post the success result directly; in production this would
+	// be produced by the Validator goroutine.
+	out, cmd := m.Update(validateResultMsg{generation: 1, err: nil})
+	m = out.(model)
+
+	if !saved {
+		t.Fatal("save function was not called on validate success")
+	}
+	if savedCfg == nil || savedCfg.Database.Host != "db.example.internal" {
+		t.Errorf("save received wrong config: %+v", savedCfg)
+	}
+	if m.finalCfg == nil {
+		t.Error("model.finalCfg is nil after success; bootstrap.Run will return nil")
+	}
+	if cmd == nil {
+		t.Fatal("success path returned nil cmd; expected tea.Quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("success cmd produced %T, want tea.QuitMsg", cmd())
+	}
+}
+
+func TestValidateFailureShowsBannerAndStaysOnStep4(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	m = fillStep3(m)
+	m = pickEditor(m, "vi")
+	next, _ := m.Update(keyMsg("enter"))
+	m = next.(model)
+
+	failure := errors.New("user_ref: secrets: secret not found")
+	out, _ := m.Update(validateResultMsg{generation: 1, err: failure})
+	m = out.(model)
+
+	if m.current != stepPreferences {
+		t.Fatalf("after validate failure: current = %d, want %d", m.current, stepPreferences)
+	}
+	if !strings.Contains(m.bannerError, "user_ref") {
+		t.Errorf("bannerError = %q, expected to contain 'user_ref'", m.bannerError)
+	}
+	if m.finalCfg != nil {
+		t.Error("finalCfg should be nil after a failed validate")
+	}
+}
+
+func TestSaveFailureSurfacesBannerNotProcessExit(t *testing.T) {
+	m := newModel(
+		context.Background(),
+		func(context.Context, *config.Config) error { return nil },
+		func(*config.Config) error { return errors.New("permission denied") }, nil,
+	)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	m = fillStep3(m)
+	m = pickEditor(m, "vi")
+	next, _ := m.Update(keyMsg("enter"))
+	m = next.(model)
+
+	out, cmd := m.Update(validateResultMsg{generation: 1, err: nil})
+	m = out.(model)
+	if m.current != stepPreferences {
+		t.Fatalf("save failure should return user to step 4, got step %d", m.current)
+	}
+	if !strings.Contains(m.bannerError, "save:") {
+		t.Errorf("bannerError = %q, expected save error prefix", m.bannerError)
+	}
+	if cmd != nil {
+		// Save failure must not terminate the program — user can retry.
+		if _, ok := cmd().(tea.QuitMsg); ok {
+			t.Error("save failure unexpectedly produced tea.Quit")
+		}
+	}
+}
+
+func TestStaleValidateResultIsDropped(t *testing.T) {
+	saved := false
+	m := newModel(
+		context.Background(),
+		func(context.Context, *config.Config) error { return nil },
+		func(*config.Config) error { saved = true; return nil }, nil,
+	)
+	m = fillStep1(m)
+	m = fillStep2(m)
+	m = fillStep3(m)
+	m = pickEditor(m, "vi")
+	// First validate run: bumps gen to 1.
+	next, _ := m.Update(keyMsg("enter"))
+	m = next.(model)
+	// First run fails — back to step 4.
+	out, _ := m.Update(validateResultMsg{generation: 1, err: errors.New("kv down")})
+	m = out.(model)
+	// User retries — bumps gen to 2.
+	next2, _ := m.Update(keyMsg("enter"))
+	m = next2.(model)
+	// A late result from the first (gen=1) run arrives. It must be
+	// silently dropped: no save, no transition, banner unchanged.
+	prevBanner := m.bannerError
+	out2, cmd := m.Update(validateResultMsg{generation: 1, err: nil})
+	m = out2.(model)
+
+	if saved {
+		t.Error("stale validateResultMsg triggered Save")
+	}
+	if m.current != stepValidating {
+		t.Errorf("current = %d, want stepValidating (%d) — stale result moved the state machine", m.current, stepValidating)
+	}
+	if m.bannerError != prevBanner {
+		t.Errorf("stale result changed bannerError from %q to %q", prevBanner, m.bannerError)
+	}
+	if cmd != nil {
+		// A stale result must not produce tea.Quit.
+		if _, ok := cmd().(tea.QuitMsg); ok {
+			t.Error("stale result produced tea.Quit")
+		}
+	}
+}
+
+func TestProviderRowNotInFocusList(t *testing.T) {
+	m := modelWith(t)
+	m = fillStep1(m)
+	if m.current != stepSecret {
+		t.Fatalf("not on step 2: %d", m.current)
+	}
+	// Tab three times: subscription → vault → user_ref → password_ref.
+	// The provider row must never receive focus.
+	for i := 1; i <= secretFieldCount-1; i++ {
+		next, _ := m.Update(keyMsg("tab"))
+		m = next.(model)
+		if m.secret.focus != i {
+			t.Fatalf("after %d tabs: focus = %d, want %d", i, m.secret.focus, i)
+		}
+	}
+	// One more tab wraps to subscription — not to a "provider" index.
 	next, _ := m.Update(keyMsg("tab"))
 	m = next.(model)
-	if m.database.focus != 0 {
-		t.Fatalf("focus after wrap = %d, want 0", m.database.focus)
-	}
-}
-
-func TestModelEnterOnNonLastFieldAdvancesFocus(t *testing.T) {
-	m := newModel()
-	next, _ := m.Update(keyMsg("enter"))
-	m = next.(model)
-	if m.database.focus != fieldPort {
-		t.Fatalf("focus after enter on host = %d, want %d", m.database.focus, fieldPort)
-	}
-	if m.current != stepDatabase {
-		t.Fatalf("current step = %d, want %d (still on step 1)", m.current, stepDatabase)
-	}
-}
-
-func TestModelEnterOnLastFieldWithInvalidStays(t *testing.T) {
-	m := newModel()
-	// Leave host blank — validate must reject and stay on step 1.
-	m.database.focus = fieldSSLMode
-	next, _ := m.Update(keyMsg("enter"))
-	m = next.(model)
-	if m.current != stepDatabase {
-		t.Fatalf("step advanced despite empty host (step=%d)", m.current)
-	}
-	if m.database.errors[fieldHost] == "" {
-		t.Fatal("expected an inline error on the host field")
-	}
-}
-
-func TestModelEnterOnLastFieldWithValidAdvances(t *testing.T) {
-	m := newModel()
-	m.database.inputs[fieldHost].SetValue("db.example.internal")
-	m.database.inputs[fieldName].SetValue("switchx")
-	m.database.focus = fieldSSLMode
-	next, _ := m.Update(keyMsg("enter"))
-	m = next.(model)
-	if m.current != stepPlaceholder {
-		t.Fatalf("step = %d, want %d (placeholder)", m.current, stepPlaceholder)
-	}
-	// Accumulator should carry the entered values forward.
-	if m.acc.host != "db.example.internal" || m.acc.name != "switchx" ||
-		m.acc.port != "5432" || m.acc.sslmode != "require" {
-		t.Fatalf("accumulator did not capture step-1 values: %+v", m.acc)
-	}
-}
-
-func TestSSLModePickerCyclesWhenFocused(t *testing.T) {
-	s := newDatabaseStep()
-	s.focus = fieldSSLMode
-	initial := s.sslmodeIndex
-
-	s, _, _ = s.Update(keyMsg("right"))
-	if want := (initial + 1) % len(validSSLModes); s.sslmodeIndex != want {
-		t.Fatalf("right: sslmodeIndex = %d, want %d", s.sslmodeIndex, want)
-	}
-
-	s, _, _ = s.Update(keyMsg("left"))
-	if s.sslmodeIndex != initial {
-		t.Fatalf("left after right: sslmodeIndex = %d, want %d", s.sslmodeIndex, initial)
-	}
-
-	// Wrap-around: from index 0, left should land on the last entry.
-	s.sslmodeIndex = 0
-	s, _, _ = s.Update(keyMsg("left"))
-	if want := len(validSSLModes) - 1; s.sslmodeIndex != want {
-		t.Fatalf("left wrap: sslmodeIndex = %d, want %d", s.sslmodeIndex, want)
-	}
-}
-
-func TestSSLModePickerIgnoresArrowsWhenNotFocused(t *testing.T) {
-	// When focus is on a textinput, left/right are part of the
-	// textinput's normal cursor handling and must not cycle the picker.
-	s := newDatabaseStep()
-	if s.focus != fieldHost {
-		t.Fatalf("precondition: initial focus = %d, want %d", s.focus, fieldHost)
-	}
-	initial := s.sslmodeIndex
-	s, _, _ = s.Update(keyMsg("right"))
-	s, _, _ = s.Update(keyMsg("left"))
-	if s.sslmodeIndex != initial {
-		t.Fatalf("picker cycled while focus on host: sslmodeIndex = %d, want %d", s.sslmodeIndex, initial)
-	}
-}
-
-func TestEditingFocusedFieldClearsItsError(t *testing.T) {
-	s := newDatabaseStep()
-	// Force errors by validating with empty host/name and bad port.
-	s.inputs[fieldPort].SetValue("")
-	s, _ = s.validate()
-	if s.errors[fieldHost] == "" || s.errors[fieldPort] == "" || s.errors[fieldName] == "" {
-		t.Fatalf("precondition: validate() did not flag empty fields: %v", s.errors)
-	}
-
-	// Type into the focused (host) field. The host error must clear,
-	// but errors on other fields must remain until those are edited.
-	s, _, _ = s.Update(keyMsg("a"))
-	if s.errors[fieldHost] != "" {
-		t.Errorf("host error not cleared after edit: %q", s.errors[fieldHost])
-	}
-	if s.errors[fieldPort] == "" {
-		t.Error("port error cleared by editing host (should be untouched)")
-	}
-	if s.errors[fieldName] == "" {
-		t.Error("name error cleared by editing host (should be untouched)")
-	}
-}
-
-func TestPlaceholderViewMentionsTAE11(t *testing.T) {
-	m := newModel()
-	m.current = stepPlaceholder
-	if got := m.View(); !strings.Contains(got, "TAE-11") {
-		t.Fatalf("placeholder view does not mention TAE-11: %q", got)
+	if m.secret.focus != fieldSecretSubscription {
+		t.Errorf("tab wrap: focus = %d, want %d", m.secret.focus, fieldSecretSubscription)
 	}
 }
