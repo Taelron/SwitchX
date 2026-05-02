@@ -5,10 +5,16 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration
+.PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration \
+        bootstrap-test-no-wizard bootstrap-test-wizard-ok \
+        bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db
 
 help: ## list targets
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} \
+		/^##@/ {printf "\n%s\n", substr($$0, 5)} \
+		/^[a-zA-Z_-]+:.*?## / {printf "  %-32s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+##@ Build & verify
 
 build:  ## go build ./...
 	go build ./...
@@ -24,12 +30,16 @@ test:   ## go test ./...
 
 verify: build vet lint test ## run the full verification gate
 
+##@ Run
+
 run:    ## go run ./cmd/switchx
 	go run ./cmd/switchx
 
 run-wizard: ## smoke the bootstrap wizard against an empty XDG_CONFIG_HOME
-	@rm -rf /tmp/switchx-wizard-smoke
-	XDG_CONFIG_HOME=/tmp/switchx-wizard-smoke go run ./cmd/switchx
+	@rm -rf .local/run/wizard-smoke
+	XDG_CONFIG_HOME=.local/run/wizard-smoke go run ./cmd/switchx
+
+##@ Local dev environment
 
 dev-up: ## bootstrap local PG: fetch KV creds + create role + database
 	@bash .local/dev-env/dev-up.sh
@@ -39,3 +49,17 @@ dev-down: ## destructive: drop the local switchx database and role (KV untouched
 
 pg-integration: ## run the gated PG integration tests against the local DB
 	@bash .local/dev-env/pg-integration.sh
+
+##@ Bootstrap tests (interactive)
+
+bootstrap-test-no-wizard: ## valid config exists → no wizard, placeholder banner
+	@bash .local/dev-env/bootstrap-test.sh
+
+bootstrap-test-wizard-ok: ## force wizard + valid seed → validate succeeds, persist
+	@bash .local/dev-env/wizard-test.sh ok
+
+bootstrap-test-wizard-bad-azure: ## force wizard + bad subscription → "secret store" error
+	@bash .local/dev-env/wizard-test.sh bad-azure
+
+bootstrap-test-wizard-bad-db: ## force wizard + nonexistent database → "database" error
+	@bash .local/dev-env/wizard-test.sh bad-db
