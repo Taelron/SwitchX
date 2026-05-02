@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -21,6 +22,7 @@ import (
 	"github.com/Taelron/SwitchX/internal/config"
 	"github.com/Taelron/SwitchX/internal/storage/postgres"
 	"github.com/Taelron/SwitchX/internal/storage/secrets/azurekeyvault"
+	"github.com/Taelron/SwitchX/internal/ui/tui/bootstrap"
 )
 
 func main() {
@@ -40,6 +42,13 @@ func run() error {
 	defer stop()
 
 	cfg, err := config.Load()
+	if errors.Is(err, config.ErrNoConfig) || errors.Is(err, config.ErrIncomplete) {
+		// Bootstrap wizard collects the missing values. TAE-10 ships
+		// the wizard shell and step 1 only; persistence and the
+		// connect-validate round-trip arrive in TAE-11, after which
+		// run() will reload the config and continue.
+		return bootstrap.Run(ctx)
+	}
 	if err != nil {
 		return err
 	}
