@@ -30,6 +30,10 @@ go.work.sum
 /switchx
 *.local.toml
 
+# Local DEV environment (per-machine setup scripts and runbooks).
+# Lives next to the code but never ships.
+/.local/
+
 # Editor / OS noise
 .idea/
 .vscode/
