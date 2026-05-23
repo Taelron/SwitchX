@@ -1,7 +1,8 @@
 # switchx — developer Makefile.
 #
-# Run `make` (no args) to list targets. Per-machine dev-env scripts
-# live in .local/dev-env/ and are not in Git.
+# Run `make` (no args) to list targets. Dev-env scripts live in
+# .local/dev-env/ (tracked); per-machine values live in .local/.env
+# (gitignored — see .local/.env.example for the template).
 
 .DEFAULT_GOAL := help
 
@@ -9,7 +10,8 @@
         pg-integration smoke-integration pg-start pg-stop \
         bootstrap-test-no-wizard bootstrap-test-edit bootstrap-test-wizard-ok \
         bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db \
-        startup-test-no-config startup-test-db-down startup-test-retry-recovers
+        startup-test-no-config startup-test-db-down startup-test-retry-recovers \
+        verify-naming-leak verify-env-failfast verify-local-env
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} \
@@ -88,3 +90,14 @@ startup-test-db-down: ## valid config + DB stopped → error screen (path 3 smok
 
 startup-test-retry-recovers: ## error screen → start DB → `r` → home (path 4 smoke)
 	@bash .local/dev-env/startup-test.sh retry-recovers
+
+##@ Local environment verification
+
+verify-naming-leak: ## confirm no internal naming (vault, subscription) leaks into tracked files
+	@bash .local/dev-env/verify-naming-leak.sh
+
+verify-env-failfast: ## confirm scripts fail with a clear message when .local/.env is missing
+	@bash .local/dev-env/verify-env-failfast.sh
+
+verify-local-env: verify-naming-leak verify-env-failfast ## run all local-env verifications
+	@echo "verify-local-env: all checks passed"

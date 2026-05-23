@@ -8,6 +8,14 @@ Phase 1 — implementation in progress. **M1 (Foundation & Bootstrap)
 closed.** See [`docs/m1-smoke-test.md`](docs/m1-smoke-test.md) for the
 end-to-end verification procedure.
 
+## First-run setup
+
+```
+cp .local/.env.example .local/.env   # template → real values
+$EDITOR .local/.env                  # fill in AZURE_VAULT (at minimum)
+make dev-up                          # bootstrap local PG role + database
+```
+
 ## Documentation
 
 The canonical documentation lives in Linear:
