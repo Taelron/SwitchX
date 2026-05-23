@@ -26,6 +26,7 @@ import (
 	"github.com/Taelron/SwitchX/internal/storage/postgres"
 	"github.com/Taelron/SwitchX/internal/storage/secrets/azurekeyvault"
 	"github.com/Taelron/SwitchX/internal/ui/tui/bootstrap"
+	"github.com/Taelron/SwitchX/internal/ui/tui/home"
 )
 
 func main() {
@@ -110,9 +111,7 @@ func run() error {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
-	fmt.Printf("switchx (placeholder) — DB ready, migrations applied (pool max %d, host %s, db %s)\n",
-		pool.Config().MaxConns, cfg.Database.Host, cfg.Database.Name)
-	return nil
+	return home.Run(ctx, cfg.Database.Name)
 }
 
 // validateConnection returns a bootstrap.Validator that exercises the
