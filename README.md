@@ -4,7 +4,9 @@ Terminal-native time tracker for consulting teams.
 
 ## Status
 
-Phase 1 — implementation in progress. Not yet runnable.
+Phase 1 — implementation in progress. **M1 (Foundation & Bootstrap)
+closed.** See [`docs/m1-smoke-test.md`](docs/m1-smoke-test.md) for the
+end-to-end verification procedure.
 
 ## Documentation
 
