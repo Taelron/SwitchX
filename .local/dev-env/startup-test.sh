@@ -4,10 +4,14 @@
 # startup-test-db-down / startup-test-retry-recovers.
 #
 # Pre-requisites (one-time):
-#   1. `make dev-up` has run (local PG + role + database).
-#   2. ~/.config/switchx/config.toml is complete (for db-down and
-#      retry-recovers scenarios; the no-config scenario uses a
-#      temporary XDG_CONFIG_HOME so the real config is left alone).
+#   1. `make dev-up` has run (local PG + role + database + dev config).
+#   2. The db-down and retry-recovers scenarios use the dev config that
+#      `make dev-up` writes to .local/dev-config/switchx/config.toml.
+#      The Makefile sets XDG_CONFIG_HOME for those scenarios; this
+#      script honors it (and falls back to ~/.config/ if you run the
+#      script directly — though that mode is not the supported path).
+#   3. The no-config scenario uses a fresh temporary XDG_CONFIG_HOME
+#      regardless, so neither the dev nor the deployed config is touched.
 set -euo pipefail
 
 scenario="${1:-}"
@@ -36,30 +40,34 @@ case "$scenario" in
         XDG_CONFIG_HOME="$XDG" go run ./cmd/switchx
         ;;
 
-    db-down)
-        echo "scenario : db-down"
-        echo
-        echo "Stopping local Postgres…"
-        bash "$DIR/pg.sh" stop
-        echo
-        echo "Expecting: error screen with \"Database refused connection\"."
-        echo "Press q to quit. Then run \`make pg-start\` to restart PG."
-        echo
-        go run ./cmd/switchx
-        ;;
+    db-down|retry-recovers)
+        # Without a valid config the binary would hit the wizard branch
+        # instead of the error-screen branch we want to exercise. Fail
+        # fast with a clear message rather than a misleading wizard launch.
+        CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/switchx/config.toml"
+        if [[ ! -f "$CONFIG" ]]; then
+            echo "no config at $CONFIG" >&2
+            echo "run \`make dev-up\` to generate the dev config." >&2
+            exit 2
+        fi
 
-    retry-recovers)
-        echo "scenario : retry-recovers"
+        echo "scenario : $scenario"
+        echo "config   : $CONFIG"
         echo
         echo "Stopping local Postgres…"
         bash "$DIR/pg.sh" stop
         echo
-        echo "Expecting: error screen appears."
-        echo
-        echo "When you see the error screen:"
-        echo "  1. In another terminal, run: make pg-start"
-        echo "  2. Press \`r\` on the error screen."
-        echo "  3. The home screen should appear with \"Connected to switchx\"."
+        if [[ "$scenario" == "db-down" ]]; then
+            echo "Expecting: error screen with \"Database refused connection\"."
+            echo "Press q to quit. Then run \`make pg-start\` to restart PG."
+        else
+            echo "Expecting: error screen appears."
+            echo
+            echo "When you see the error screen:"
+            echo "  1. In another terminal, run: make pg-start"
+            echo "  2. Press \`r\` on the error screen."
+            echo "  3. The home screen should appear with \"Connected to switchx\"."
+        fi
         echo
         go run ./cmd/switchx
         ;;

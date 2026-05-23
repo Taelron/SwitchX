@@ -23,8 +23,9 @@ fail=0
 for p in "${PATTERNS[@]}"; do
     # `git grep` searches only tracked content by default — exactly
     # what we want. An untracked .local/.env carrying these names is
-    # the expected state.
-    if git grep -nF "$p" >&2; then
+    # the expected state. Exclude this script itself: the PATTERNS array
+    # literal is the whole point of the file and obviously not a leak.
+    if git grep -nF "$p" -- ':!:.local/dev-env/verify-naming-leak.sh' >&2; then
         echo "FAIL: '$p' found in tracked content above" >&2
         fail=1
     fi

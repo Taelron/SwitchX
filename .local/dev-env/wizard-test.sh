@@ -35,8 +35,8 @@ fi
 source "$ENV_FILE"
 
 : "${AZURE_VAULT:?missing in .local/.env}"
-: "${KV_USER_REF:?missing in .local/.env}"
-: "${KV_PASSWORD_REF:?missing in .local/.env}"
+KV_USER_REF="${KV_USER_REF:-SWITCHX-DB-USER}"
+KV_PASSWORD_REF="${KV_PASSWORD_REF:-SWITCHX-DB-PASSWORD}"
 
 SUBSCRIPTION="${AZURE_SUBSCRIPTION:-$(az account show --query name -o tsv)}"
 PG_HOST="${PG_HOST:-localhost}"

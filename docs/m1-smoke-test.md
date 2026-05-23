@@ -19,11 +19,13 @@ Before starting:
    matching your Linux username that holds `CREATEDB` and
    `CREATEROLE`.
 2. `az login` has produced an Azure session that can read the
-   developer Key Vault holding `SWITCHX-DB-USER` and
-   `SWITCHX-DB-PASSWORD`. See your local `.local/dev-env/README.md`
-   for the per-machine vault name and bootstrap script.
+   developer Key Vault named by `AZURE_VAULT` in `.local/.env`
+   (see `.local/.env.example` for the template).
 3. `make dev-up` has run successfully — provisions the `switchx_user`
-   role and the `switchx` database against your local PG.
+   role + `switchx` database against your local PG **and** writes
+   `.local/dev-config/switchx/config.toml` (the dev XDG config the
+   `make` targets use). The deployed binary's `~/.config/switchx/`
+   is independent and not touched by this flow.
 
 ## Steps
 

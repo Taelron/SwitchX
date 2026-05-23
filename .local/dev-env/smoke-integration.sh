@@ -21,7 +21,7 @@ fi
 source "$ENV_FILE"
 
 : "${AZURE_VAULT:?missing in .local/.env}"
-: "${KV_PASSWORD_REF:?missing in .local/.env}"
+KV_PASSWORD_REF="${KV_PASSWORD_REF:-SWITCHX-DB-PASSWORD}"
 PG_USER="${PG_USER:-switchx_user}"
 
 PW=$(az keyvault secret show --vault-name "$AZURE_VAULT" --name "$KV_PASSWORD_REF" --query value -o tsv)

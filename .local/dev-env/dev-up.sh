@@ -16,11 +16,12 @@ fi
 source "$ENV_FILE"
 
 : "${AZURE_VAULT:?missing in .local/.env}"
-: "${KV_USER_REF:?missing in .local/.env}"
-: "${KV_PASSWORD_REF:?missing in .local/.env}"
+KV_USER_REF="${KV_USER_REF:-SWITCHX-DB-USER}"
+KV_PASSWORD_REF="${KV_PASSWORD_REF:-SWITCHX-DB-PASSWORD}"
 PG_DB="${PG_DB:-switchx}"
 PG_HOST="${PG_HOST:-localhost}"
 PG_PORT="${PG_PORT:-5432}"
+PG_SSLMODE="${PG_SSLMODE:-disable}"
 
 ROLE=$(az keyvault secret show --vault-name "$AZURE_VAULT" --name "$KV_USER_REF"     --query value -o tsv)
 PW=$(  az keyvault secret show --vault-name "$AZURE_VAULT" --name "$KV_PASSWORD_REF" --query value -o tsv)
@@ -50,4 +51,36 @@ SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role')
 \gexec
 EOSQL
 
+# Write the dev XDG config so `make run` and the bootstrap/startup test
+# targets read from .local/dev-config/ instead of ~/.config/switchx/
+# (which is reserved for the deployed binary's real user data).
+# Subscription is resolved from .env first, then `az account show`, matching
+# wizard-test.sh's pattern.
+SUBSCRIPTION="${AZURE_SUBSCRIPTION:-$(az account show --query name -o tsv)}"
+REPO_ROOT="$(cd "$DIR/../.." && pwd)"
+DEV_XDG="$REPO_ROOT/.local/dev-config"
+mkdir -p "$DEV_XDG/switchx"
+cat > "$DEV_XDG/switchx/config.toml" <<EOF
+[database]
+host = "$PG_HOST"
+port = $PG_PORT
+name = "$PG_DB"
+sslmode = "$PG_SSLMODE"
+
+[database.secret]
+provider     = "azurekeyvault"
+subscription = "$SUBSCRIPTION"
+vault        = "$AZURE_VAULT"
+user_ref     = "$KV_USER_REF"
+password_ref = "$KV_PASSWORD_REF"
+
+[user]
+timezone = "Europe/Brussels"
+
+[ui]
+editor = "vi"
+EOF
+chmod 0600 "$DEV_XDG/switchx/config.toml"
+
 echo "ready: database '$PG_DB' owned by role '$ROLE' on $PG_HOST:$PG_PORT"
+echo "dev config: $DEV_XDG/switchx/config.toml (XDG_CONFIG_HOME for make targets)"
