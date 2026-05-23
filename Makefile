@@ -5,9 +5,11 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration \
+.PHONY: help build vet lint test verify run run-wizard dev-up dev-down \
+        pg-integration pg-start pg-stop \
         bootstrap-test-no-wizard bootstrap-test-edit bootstrap-test-wizard-ok \
-        bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db
+        bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db \
+        startup-test-no-config startup-test-db-down startup-test-retry-recovers
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} \
@@ -50,6 +52,12 @@ dev-down: ## destructive: drop the local switchx database and role (KV untouched
 pg-integration: ## run the gated PG integration tests against the local DB
 	@bash .local/dev-env/pg-integration.sh
 
+pg-start: ## start the local Postgres service (for manual error-screen testing)
+	@bash .local/dev-env/pg.sh start
+
+pg-stop: ## stop the local Postgres service (for manual error-screen testing)
+	@bash .local/dev-env/pg.sh stop
+
 ##@ Bootstrap tests (interactive)
 
 bootstrap-test-no-wizard: ## valid config exists → no wizard, placeholder banner
@@ -66,3 +74,14 @@ bootstrap-test-wizard-bad-azure: ## force wizard + bad subscription → "secret 
 
 bootstrap-test-wizard-bad-db: ## force wizard + nonexistent database → "database" error
 	@bash .local/dev-env/wizard-test.sh bad-db
+
+##@ Startup decision tree tests (interactive)
+
+startup-test-no-config: ## no config present → wizard launches (path 1 smoke)
+	@bash .local/dev-env/startup-test.sh no-config
+
+startup-test-db-down: ## valid config + DB stopped → error screen (path 3 smoke)
+	@bash .local/dev-env/startup-test.sh db-down
+
+startup-test-retry-recovers: ## error screen → start DB → `r` → home (path 4 smoke)
+	@bash .local/dev-env/startup-test.sh retry-recovers
