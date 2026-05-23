@@ -5,7 +5,8 @@ Terminal-native time tracker for consulting teams. Workspace-level rules and the
 ## Current state
 
 **Phase 1 — minimum viable implementation.**
-Active milestone: **M1 — Foundation & Bootstrap** ([switchx project in Linear](https://linear.app/taelron/project/switchx-0b0069bd1c04)).
+**M1 — Foundation & Bootstrap: closed.** Verification procedure in [`docs/m1-smoke-test.md`](docs/m1-smoke-test.md); release notes drafted in [`docs/releases/v0.1.md`](docs/releases/v0.1.md).
+Active milestone: TBD — next milestone planned by Web Claude in [the switchx project](https://linear.app/taelron/project/switchx-0b0069bd1c04).
 
 This file is updated when the active milestone changes (typically once per milestone closure).
 
@@ -20,13 +21,13 @@ This file is updated when the active milestone changes (typically once per miles
 - @ADR-0004 ([Linear](https://linear.app/taelron/document/adr-0004-configuration-and-bootstrap-e5000764e4c4)) — Configuration and Bootstrap
 - @ADR-0005 ([Linear](https://linear.app/taelron/document/adr-0005-secret-handling-for-switchx-ea21d3f379f4)) — Secret Handling for switchx
 
-## Active milestone — M1
+## M1 (closed)
 
-**Goal:** A user can install the binary, run it, complete the bootstrap wizard, and reach a placeholder home screen connected to Postgres. No domain features yet.
+**Goal achieved:** A user can install the binary, run it, complete the bootstrap wizard, and reach a placeholder home screen connected to Postgres. No domain features — that's M2+.
 
-**Issues:** TAE-5 through TAE-14, attached to the M1 milestone in Linear. Each issue's description carries its acceptance criteria, references, out-of-scope items, and dependencies. Start with TAE-5 (repo scaffold + CI); the dependency graph dictates the rest.
+**Issues:** TAE-5 through TAE-14, all merged. End-to-end verification: [`docs/m1-smoke-test.md`](docs/m1-smoke-test.md) (manual walkthrough) and `make smoke-integration` (automated against local PG).
 
-**Locked decisions for M1:**
+**Locked decisions from M1, still in force:**
 - PostgreSQL minimum version: **16** (tested against 16 and 17).
 - Migrations run on every launch; M1 ships with empty `migrations/`.
 - Wizard re-runs until the database connection is validated.
