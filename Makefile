@@ -5,7 +5,8 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration \
+.PHONY: help build vet lint test verify run run-wizard dev-up dev-down \
+        pg-integration pg-start pg-stop \
         bootstrap-test-no-wizard bootstrap-test-edit bootstrap-test-wizard-ok \
         bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db \
         startup-test-no-config startup-test-db-down startup-test-retry-recovers
@@ -50,6 +51,12 @@ dev-down: ## destructive: drop the local switchx database and role (KV untouched
 
 pg-integration: ## run the gated PG integration tests against the local DB
 	@bash .local/dev-env/pg-integration.sh
+
+pg-start: ## start the local Postgres service (for manual error-screen testing)
+	@bash .local/dev-env/pg.sh start
+
+pg-stop: ## stop the local Postgres service (for manual error-screen testing)
+	@bash .local/dev-env/pg.sh stop
 
 ##@ Bootstrap tests (interactive)
 
