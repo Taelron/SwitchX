@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-# Edit-mode smoke: switchx --edit against the real on-disk config.
+# Edit-mode smoke: switchx --edit against the on-disk dev config.
 # Forces the wizard pre-filled with the existing values; on success
 # the wizard saves back to the same path. Useful for verifying that
 # round-tripping through the wizard does not corrupt the config.
 #
 #   make bootstrap-test-edit
 #
+# When invoked via the Makefile, XDG_CONFIG_HOME is set to
+# .local/dev-config/ so this round-trips the dev config (produced by
+# `make dev-up`), not the deployed binary's user config at ~/.config/.
+#
 # Pre-requisites (one-time):
-#   1. `make dev-up` has run (local PG + role + database).
+#   1. `make dev-up` has run (local PG + role + database + dev config).
 #   2. `az login` has produced a session that can read the dev KV
 #      named in .local/.env (AZURE_VAULT).
-#   3. ~/.config/switchx/config.toml exists and is complete.
 set -euo pipefail
 
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/switchx/config.toml"
 if [[ ! -f "$CONFIG" ]]; then
     echo "no config at $CONFIG" >&2
-    echo "run \`make bootstrap-test-wizard-ok\` once to create one." >&2
+    echo "run \`make dev-up\` to generate the dev config." >&2
     exit 2
 fi
 

@@ -32,3 +32,12 @@ DROP ROLE IF EXISTS ${PG_USER};
 EOSQL
 
 echo "dropped database '${PG_DB}' and role '${PG_USER}'"
+
+# Symmetric to dev-up: remove the synthetic dev config too. ~/.config/
+# is untouched on principle (it belongs to the deployed binary).
+REPO_ROOT="$(cd "$DIR/../.." && pwd)"
+DEV_XDG="$REPO_ROOT/.local/dev-config"
+if [[ -d "$DEV_XDG" ]]; then
+    rm -rf "$DEV_XDG"
+    echo "removed dev XDG: $DEV_XDG"
+fi

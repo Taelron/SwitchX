@@ -13,8 +13,17 @@ end-to-end verification procedure.
 ```
 cp .local/.env.example .local/.env   # template → real values
 $EDITOR .local/.env                  # fill in AZURE_VAULT (at minimum)
-make dev-up                          # bootstrap local PG role + database
+make dev-up                          # provisions PG + writes .local/dev-config/
+make run                             # runs against the dev config — ~/.config untouched
 ```
+
+The dev binary launched via `make` always reads from `.local/dev-config/`,
+which is separate from `~/.config/switchx/` (where a deployed `switchx`
+installed via `go install` reads its real user data). The two configs
+do not interact.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full env-var contract
+and where defaults live (scripts vs. Makefile).
 
 ## Documentation
 
