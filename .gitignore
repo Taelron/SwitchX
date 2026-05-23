@@ -30,9 +30,14 @@ go.work.sum
 /switchx
 *.local.toml
 
-# Local DEV environment (per-machine setup scripts and runbooks).
-# Lives next to the code but never ships.
-/.local/
+# Local DEV environment (per-machine setup scripts and values).
+# Scripts (.sh) and the example env file are tracked; real values
+# (.local/.env) and ephemeral state (.local/run/) are not.
+/.local/*
+!/.local/.env.example
+!/.local/dev-env/
+/.local/dev-env/*
+!/.local/dev-env/*.sh
 
 # Editor / OS noise
 .idea/
