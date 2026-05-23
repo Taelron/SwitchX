@@ -7,7 +7,8 @@
 
 .PHONY: help build vet lint test verify run run-wizard dev-up dev-down pg-integration \
         bootstrap-test-no-wizard bootstrap-test-edit bootstrap-test-wizard-ok \
-        bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db
+        bootstrap-test-wizard-bad-azure bootstrap-test-wizard-bad-db \
+        startup-test-no-config startup-test-db-down startup-test-retry-recovers
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} \
@@ -66,3 +67,14 @@ bootstrap-test-wizard-bad-azure: ## force wizard + bad subscription → "secret 
 
 bootstrap-test-wizard-bad-db: ## force wizard + nonexistent database → "database" error
 	@bash .local/dev-env/wizard-test.sh bad-db
+
+##@ Startup decision tree tests (interactive)
+
+startup-test-no-config: ## no config present → wizard launches (path 1 smoke)
+	@bash .local/dev-env/startup-test.sh no-config
+
+startup-test-db-down: ## valid config + DB stopped → error screen (path 3 smoke)
+	@bash .local/dev-env/startup-test.sh db-down
+
+startup-test-retry-recovers: ## error screen → start DB → `r` → home (path 4 smoke)
+	@bash .local/dev-env/startup-test.sh retry-recovers
