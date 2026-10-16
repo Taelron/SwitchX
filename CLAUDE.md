@@ -29,12 +29,12 @@ This file is updated when the active milestone changes (typically once per miles
 
 **Locked decisions from M1, still in force:**
 - PostgreSQL minimum version: **16** (tested against 16 and 17).
-- Migrations run on every launch; M1 ships with empty `migrations/`.
+- Migrations run on every launch; M1 ships with an empty `internal/storage/postgres/migrations/`.
 - Wizard re-runs until the database connection is validated.
 
 ## Quick reference
 
-- **Module layout:** `internal/domain/`, `internal/app/`, `internal/storage/`, `internal/ui/tui/`, `migrations/`, `cmd/switchx/`
+- **Module layout:** `internal/domain/`, `internal/app/`, `internal/storage/`, `internal/ui/tui/`, `internal/storage/postgres/migrations/`, `cmd/switchx/`
 - **TUI stack:** Bubble Tea + Lipgloss
 - **DB driver:** `pgx/v5` with `pgxpool` (max 4 connections)
 - **Migrations:** `golang-migrate`
